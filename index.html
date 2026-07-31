@@ -2,31 +2,38 @@
 <html lang="mn">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Board Dash</title>
 <style>
   html, body {
     margin: 0; padding: 0; overflow: hidden;
-    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+    background: #000;
     font-family: 'Segoe UI', sans-serif;
     height: 100%;
     touch-action: manipulation;
     -webkit-user-select: none;
     user-select: none;
+    overscroll-behavior: none;
   }
-  #wrap { position: relative; width: 100vw; height: 100vh; }
+  #wrap {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+  }
   canvas { display: block; width: 100%; height: 100%; }
   #hud {
-    position: absolute; top: 14px; left: 0; right: 0;
-    text-align: center; color: #fff; font-size: 22px; font-weight: 700;
+    position: absolute; top: 10px; left: 0; right: 0;
+    text-align: center; color: #fff; font-size: 20px; font-weight: 700;
     text-shadow: 0 2px 6px rgba(0,0,0,0.6); pointer-events: none; letter-spacing: 1px;
   }
   #controls {
-    position: absolute; bottom: 24px; left: 0; right: 0;
-    display: flex; justify-content: center; gap: 22px; pointer-events: none;
+    position: absolute; bottom: 16px; left: 0; right: 0;
+    display: flex; justify-content: center; gap: 20px; pointer-events: none;
   }
   .ctrl-btn {
-    pointer-events: auto; width: 120px; height: 64px; border-radius: 16px;
-    border: none; font-size: 18px; font-weight: 800; letter-spacing: 1px;
+    pointer-events: auto; width: 108px; height: 56px; border-radius: 14px;
+    border: none; font-size: 16px; font-weight: 800; letter-spacing: 1px;
     box-shadow: 0 6px 16px rgba(0,0,0,0.4); -webkit-tap-highlight-color: transparent;
   }
   #jumpBtn { background: linear-gradient(135deg,#9fd3ff,#4a90d9); color: #0b2545; }
@@ -35,16 +42,37 @@
   #overlay {
     position: absolute; inset: 0; display: flex; flex-direction: column;
     align-items: center; justify-content: center; color: #fff;
-    background: rgba(10,10,20,0.55); text-align: center; gap: 14px;
+    background: rgba(10,10,20,0.7); text-align: center; gap: 14px;
+    z-index: 20;
   }
-  #overlay h1 { margin: 0; font-size: 34px; letter-spacing: 1px; text-shadow: 0 3px 10px rgba(0,0,0,0.6); }
-  #overlay p { margin: 0; opacity: 0.85; font-size: 15px; max-width: 320px; }
+  #overlay h1 { margin: 0; font-size: 30px; letter-spacing: 1px; text-shadow: 0 3px 10px rgba(0,0,0,0.6); }
+  #overlay p { margin: 0; opacity: 0.85; font-size: 14px; max-width: 300px; }
   #overlay button.startBtn {
     margin-top: 8px; padding: 12px 28px; font-size: 17px; font-weight: 700;
     border: none; border-radius: 30px; background: linear-gradient(135deg,#f5c518,#f28c18);
     color: #1a1a2e; cursor: pointer; box-shadow: 0 6px 16px rgba(0,0,0,0.35);
   }
   #overlay button.startBtn:active { transform: scale(0.96); }
+  #rotateOverlay {
+    position: fixed; inset: 0; z-index: 999;
+    background: #05050c;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    text-align: center;
+    gap: 16px;
+  }
+  #rotateOverlay .icon {
+    font-size: 54px;
+    animation: rotatePulse 1.4s ease-in-out infinite;
+  }
+  #rotateOverlay p { max-width: 260px; opacity: 0.85; font-size: 15px; margin: 0; }
+  @keyframes rotatePulse {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(90deg); }
+  }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -62,7 +90,12 @@
     <button id="startBtn" class="startBtn">Эхлэх</button>
   </div>
 </div>
+<div id="rotateOverlay">
+  <div class="icon">📱</div>
+  <p>Тоглохын тулд утсаа хэвтээ (landscape) байрлалд эргүүлнэ үү</p>
+</div>
 <script>
+const wrap = document.getElementById('wrap');
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const hud = document.getElementById('hud');
@@ -72,6 +105,30 @@ const jumpBtn = document.getElementById('jumpBtn');
 const boostBtn = document.getElementById('boostBtn');
 const overlayTitle = overlay.querySelector('h1');
 const overlayText = overlay.querySelector('p');
+const rotateOverlay = document.getElementById('rotateOverlay');
+
+// --- orientation gate: block play in portrait, prompt to rotate ---
+function checkOrientation() {
+  const isPortrait = window.innerHeight > window.innerWidth;
+  rotateOverlay.style.display = isPortrait ? 'flex' : 'none';
+}
+window.addEventListener('resize', checkOrientation);
+window.addEventListener('orientationchange', checkOrientation);
+checkOrientation();
+
+// --- fullscreen + landscape lock, triggered by user gesture ---
+async function goFullscreenLandscape() {
+  try {
+    const el = document.documentElement;
+    if (el.requestFullscreen) await el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+  } catch (e) { /* fullscreen may be denied, ignore */ }
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      await screen.orientation.lock('landscape');
+    }
+  } catch (e) { /* not supported (e.g. iOS Safari) - user rotates manually */ }
+}
 
 function resize() {
   canvas.width = window.innerWidth * devicePixelRatio;
@@ -86,6 +143,11 @@ resize();
 // --- sprite image: put "sprite.png" in the SAME folder as this html file ---
 const sprite = new Image();
 sprite.src = "sprite.png";
+// natural aspect ratio of the sprite (portrait image, taller than wide)
+let spriteAR = 465 / 867; // width / height, fallback until image loads
+sprite.addEventListener('load', () => {
+  spriteAR = sprite.naturalWidth / sprite.naturalHeight;
+});
 
 const GROUND_Y_RATIO = 0.72;
 let W = window.innerWidth, H = window.innerHeight;
@@ -97,14 +159,15 @@ const BASE_SPEED = 420;
 const BOOST_SPEED = 760;
 const BOOST_LIFT = -600;
 const BOARD_W = 78, BOARD_H = 20;
-const PLAYER_SIZE = 84;
+const PLAYER_H = 84;                 // fixed height, width derived from sprite's real aspect ratio
+function playerW() { return PLAYER_H * spriteAR; }
 
 let player, world, obstacles, particles, score, best = 0, speed, running, gameOver, holdStart, boosting, groundY;
 let spawnTimer = 0, nextSpawnGap = 900;
 
 function resetGame() {
   groundY = H * GROUND_Y_RATIO;
-  player = { x: W * 0.28, y: groundY - PLAYER_SIZE, vy: 0, onGround: true, rot: 0 };
+  player = { x: W * 0.28, y: groundY - PLAYER_H, vy: 0, onGround: true, rot: 0 };
   world = { dist: 0 };
   obstacles = [];
   particles = [];
@@ -134,7 +197,7 @@ function doJump() {
   if (player.onGround) {
     player.vy = JUMP_VELOCITY;
     player.onGround = false;
-    spawnBurst(player.x + PLAYER_SIZE*0.3, player.y + PLAYER_SIZE, 10);
+    spawnBurst(player.x + playerW()*0.3, player.y + PLAYER_H, 10);
   }
 }
 
@@ -184,6 +247,7 @@ window.addEventListener('keyup', (e) => {
 });
 
 startBtn.addEventListener('click', () => {
+  goFullscreenLandscape();
   showStart(false);
   resetGame();
   running = true;
@@ -235,10 +299,10 @@ function update(dt, now) {
   }
   player.y += player.vy * dt;
 
-  if (player.y + PLAYER_SIZE >= groundY) {
-    player.y = groundY - PLAYER_SIZE;
+  if (player.y + PLAYER_H >= groundY) {
+    player.y = groundY - PLAYER_H;
     if (!player.onGround && player.vy > 200) {
-      spawnBurst(player.x + PLAYER_SIZE*0.3, groundY, 8);
+      spawnBurst(player.x + playerW()*0.3, groundY, 8);
     }
     player.vy = 0;
     player.onGround = true;
@@ -261,8 +325,9 @@ function update(dt, now) {
   for (const o of obstacles) { o.x -= speed * dt; }
   obstacles = obstacles.filter(o => o.x + o.w > -20);
 
-  const pLeft = player.x + 14, pRight = player.x + PLAYER_SIZE - 14;
-  const pBottom = player.y + PLAYER_SIZE - 6;
+  const pw = playerW();
+  const pLeft = player.x + pw*0.17, pRight = player.x + pw - pw*0.17;
+  const pBottom = player.y + PLAYER_H - 6;
   for (const o of obstacles) {
     const oTop = groundY - o.h;
     if (pRight > o.x && pLeft < o.x + o.w && pBottom > oTop) {
@@ -286,7 +351,7 @@ function update(dt, now) {
 
   if (boosting && Math.random() < 0.6) {
     particles.push({
-      x: player.x - 4, y: player.y + PLAYER_SIZE - 6,
+      x: player.x - 4, y: player.y + PLAYER_H - 6,
       vx: -speed*0.4 - Math.random()*60, vy: (Math.random()-0.5)*60,
       life: 0.25, t: 0, c: Math.random()<0.5 ? '#ff8a3d' : '#ffd23f'
     });
@@ -300,7 +365,7 @@ function drawBackgroundParallax() {
   for (let i=0;i<6;i++) {
     const x = (W - ((t*0.05 + i*260) % (W+300)));
     ctx.beginPath();
-    ctx.arc(x, 70 + (i%3)*40, 26, 0, Math.PI*2);
+    ctx.arc(x, 60 + (i%3)*30, 22, 0, Math.PI*2);
     ctx.fill();
   }
   ctx.restore();
@@ -377,8 +442,9 @@ function drawParticles() {
 }
 
 function drawBoard() {
-  const bx = player.x - 4;
-  const by = player.y + PLAYER_SIZE - 6;
+  const pw = playerW();
+  const bx = player.x + pw/2 - BOARD_W/2;
+  const by = player.y + PLAYER_H - 8;
   ctx.save();
   ctx.translate(bx + BOARD_W/2, by + BOARD_H/2);
   ctx.rotate(player.rot * 0.6);
@@ -403,14 +469,16 @@ function drawBoard() {
 }
 
 function drawPlayer() {
+  const pw = playerW();
   ctx.save();
-  ctx.translate(player.x + PLAYER_SIZE/2, player.y + PLAYER_SIZE/2 - 6);
+  ctx.translate(player.x + pw/2, player.y + PLAYER_H/2 - 6);
   ctx.rotate(player.rot);
   if (sprite.complete && sprite.naturalWidth > 0) {
-    ctx.drawImage(sprite, -PLAYER_SIZE/2, -PLAYER_SIZE/2, PLAYER_SIZE, PLAYER_SIZE);
+    // draw with the sprite's true aspect ratio so it never looks squished/stretched
+    ctx.drawImage(sprite, -pw/2, -PLAYER_H/2, pw, PLAYER_H);
   } else {
     ctx.fillStyle = '#444';
-    ctx.fillRect(-PLAYER_SIZE/2, -PLAYER_SIZE/2, PLAYER_SIZE, PLAYER_SIZE);
+    ctx.fillRect(-pw/2, -PLAYER_H/2, pw, PLAYER_H);
   }
   ctx.restore();
 }
