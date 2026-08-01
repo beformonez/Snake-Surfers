@@ -47,6 +47,22 @@
   }
   #overlay h1 { margin: 0; font-size: 30px; letter-spacing: 1px; text-shadow: 0 3px 10px rgba(0,0,0,0.6); }
   #overlay p { margin: 0; opacity: 0.85; font-size: 14px; max-width: 300px; }
+  #idleWrap {
+    width: 34vh;
+    height: 34vh;
+    max-width: 220px;
+    max-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    filter: drop-shadow(0 10px 18px rgba(0,0,0,0.5));
+  }
+  #idleWrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: -webkit-optimize-contrast;
+  }
   #overlay button.startBtn {
     margin-top: 8px; padding: 12px 28px; font-size: 17px; font-weight: 700;
     border: none; border-radius: 30px; background: linear-gradient(135deg,#f5c518,#f28c18);
@@ -85,9 +101,10 @@
     <button id="boostBtn" class="ctrl-btn">BOOST</button>
   </div>
   <div id="overlay">
+    <div id="idleWrap"><img id="idleImg" src="idle/01.png" alt="character"></div>
     <h1>BOARD DASH</h1>
     <p>Нисдэг board дээр гүйж яв. ҮСРЭХ дар — үсэрнэ. BOOST-ыг барь — хурдасаад дээш хөвнө.</p>
-    <button id="startBtn" class="startBtn">Эхлэх</button>
+    <button id="startBtn" class="startBtn">PLAY</button>
   </div>
 </div>
 <div id="rotateOverlay">
@@ -106,6 +123,31 @@ const boostBtn = document.getElementById('boostBtn');
 const overlayTitle = overlay.querySelector('h1');
 const overlayText = overlay.querySelector('p');
 const rotateOverlay = document.getElementById('rotateOverlay');
+const idleImg = document.getElementById('idleImg');
+
+// --- Home screen idle animation (21 frames, plays only while the menu/overlay is visible) ---
+const IDLE_FRAME_COUNT = 21;
+const IDLE_FRAME_MS = 100;
+const idleFrames = [];
+for (let i = 1; i <= IDLE_FRAME_COUNT; i++) {
+  const img = new Image();
+  img.src = 'idle/' + String(i).padStart(2, '0') + '.png';
+  idleFrames.push(img);
+}
+let idleFrameIndex = 0;
+let idleTimerId = null;
+function startIdleAnim() {
+  if (idleTimerId) return;
+  idleFrameIndex = 0;
+  idleImg.src = idleFrames[0].src;
+  idleTimerId = setInterval(() => {
+    idleFrameIndex = (idleFrameIndex + 1) % IDLE_FRAME_COUNT;
+    idleImg.src = idleFrames[idleFrameIndex].src;
+  }, IDLE_FRAME_MS);
+}
+function stopIdleAnim() {
+  if (idleTimerId) { clearInterval(idleTimerId); idleTimerId = null; }
+}
 
 // --- orientation gate: block play in portrait, prompt to rotate ---
 function checkOrientation() {
@@ -266,14 +308,23 @@ startBtn.addEventListener('click', () => {
   running = true;
 });
 
-function showStart(show, title, text, btnLabel) {
+function showStart(show, title, text, btnLabel, showIdle) {
+  if (showIdle === undefined) showIdle = true;
   if (show) {
     overlay.classList.remove('hidden');
     if (title) overlayTitle.textContent = title;
     if (text) overlayText.textContent = text;
-    startBtn.textContent = btnLabel || 'Эхлэх';
+    startBtn.textContent = btnLabel || 'PLAY';
+    if (showIdle) {
+      idleImg.parentElement.classList.remove('hidden');
+      startIdleAnim();
+    } else {
+      idleImg.parentElement.classList.add('hidden');
+      stopIdleAnim();
+    }
   } else {
     overlay.classList.add('hidden');
+    stopIdleAnim();
   }
 }
 
@@ -281,7 +332,8 @@ function endGame() {
   gameOver = true;
   running = false;
   best = Math.max(best, Math.floor(score));
-  showStart(true, 'GAME OVER', 'Оноо: ' + Math.floor(score) + '   |   Дээд оноо: ' + best, 'Дахин эхлэх');
+  // idle animation is only prepared for the Home screen, so the Game Over screen skips it
+  showStart(true, 'GAME OVER', 'Оноо: ' + Math.floor(score) + '   |   Дээд оноо: ' + best, 'Дахин эхлэх', false);
 }
 
 let lastTime = performance.now();
