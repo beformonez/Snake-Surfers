@@ -166,10 +166,14 @@ const JUMP_VELOCITY = -820;
 const BASE_SPEED = 420;
 const BOOST_SPEED = 760;
 const BOOST_LIFT = -600;
-const BOARD_H = 22;                  // fixed height, width derived from board image's real aspect ratio
-function boardW() { return BOARD_H * boardAR; }
 const PLAYER_H = 84;                 // fixed height, width derived from sprite's real aspect ratio
 function playerW() { return PLAYER_H * spriteAR; }
+function boardW() { return playerW() * 1.45; }   // board is noticeably wider than the sprite's feet
+function boardH() { return boardW() / boardAR; }
+// shared pivot: the point where the sprite's feet meet the board (both rotate around this)
+function footPivot() {
+  return { x: player.x + playerW()/2, y: player.y + PLAYER_H };
+}
 
 let player, world, obstacles, particles, score, best = 0, speed, running, gameOver, holdStart, boosting, groundY;
 let spawnTimer = 0, nextSpawnGap = 900;
@@ -451,48 +455,49 @@ function drawParticles() {
 }
 
 function drawBoard() {
-  const pw = playerW();
   const bw = boardW();
-  const bx = player.x + pw/2 - bw/2;
-  const by = player.y + PLAYER_H - 10;
+  const bh = boardH();
+  const pivot = footPivot();
   ctx.save();
-  ctx.translate(bx + bw/2, by + BOARD_H/2);
+  ctx.translate(pivot.x, pivot.y);
   ctx.rotate(player.rot * 0.6);
 
   // boost glow behind the board
   if (boosting) {
     ctx.save();
     ctx.globalAlpha = 0.55;
-    const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, bw*0.65);
+    const glow = ctx.createRadialGradient(0, bh*0.2, 2, 0, bh*0.2, bw*0.65);
     glow.addColorStop(0, '#ffd23f');
     glow.addColorStop(1, 'rgba(255,138,61,0)');
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.ellipse(0, 0, bw*0.65, BOARD_H*1.8, 0, 0, Math.PI*2);
+    ctx.ellipse(0, bh*0.2, bw*0.65, bh*1.8, 0, 0, Math.PI*2);
     ctx.fill();
     ctx.restore();
   }
 
+  // board sits just below the pivot, its top edge touching the sprite's feet
   if (boardImg.complete && boardImg.naturalWidth > 0) {
-    ctx.drawImage(boardImg, -bw/2, -BOARD_H/2, bw, BOARD_H);
+    ctx.drawImage(boardImg, -bw/2, -bh*0.25, bw, bh);
   } else {
     ctx.fillStyle = boosting ? '#ffb648' : '#6b7a3f';
-    ctx.fillRect(-bw/2, -BOARD_H/2, bw, BOARD_H);
+    ctx.fillRect(-bw/2, -bh*0.25, bw, bh);
   }
   ctx.restore();
 }
 
 function drawPlayer() {
   const pw = playerW();
+  const pivot = footPivot();
   ctx.save();
-  ctx.translate(player.x + pw/2, player.y + PLAYER_H/2 - 6);
+  ctx.translate(pivot.x, pivot.y);
   ctx.rotate(player.rot);
   if (sprite.complete && sprite.naturalWidth > 0) {
-    // draw with the sprite's true aspect ratio so it never looks squished/stretched
-    ctx.drawImage(sprite, -pw/2, -PLAYER_H/2, pw, PLAYER_H);
+    // pivot is at the sprite's feet, so draw the image extending upward from (0,0)
+    ctx.drawImage(sprite, -pw/2, -PLAYER_H, pw, PLAYER_H);
   } else {
     ctx.fillStyle = '#444';
-    ctx.fillRect(-pw/2, -PLAYER_H/2, pw, PLAYER_H);
+    ctx.fillRect(-pw/2, -PLAYER_H, pw, PLAYER_H);
   }
   ctx.restore();
 }
