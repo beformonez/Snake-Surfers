@@ -149,6 +149,14 @@ sprite.addEventListener('load', () => {
   spriteAR = sprite.naturalWidth / sprite.naturalHeight;
 });
 
+// --- board image: put "board.png" in the SAME folder as this html file ---
+const boardImg = new Image();
+boardImg.src = "board.png";
+let boardAR = 1423 / 661; // width / height, fallback until image loads
+boardImg.addEventListener('load', () => {
+  boardAR = boardImg.naturalWidth / boardImg.naturalHeight;
+});
+
 const GROUND_Y_RATIO = 0.72;
 let W = window.innerWidth, H = window.innerHeight;
 window.addEventListener('resize', () => { W = window.innerWidth; H = window.innerHeight; });
@@ -158,7 +166,8 @@ const JUMP_VELOCITY = -820;
 const BASE_SPEED = 420;
 const BOOST_SPEED = 760;
 const BOOST_LIFT = -600;
-const BOARD_W = 78, BOARD_H = 20;
+const BOARD_H = 22;                  // fixed height, width derived from board image's real aspect ratio
+function boardW() { return BOARD_H * boardAR; }
 const PLAYER_H = 84;                 // fixed height, width derived from sprite's real aspect ratio
 function playerW() { return PLAYER_H * spriteAR; }
 
@@ -443,28 +452,33 @@ function drawParticles() {
 
 function drawBoard() {
   const pw = playerW();
-  const bx = player.x + pw/2 - BOARD_W/2;
-  const by = player.y + PLAYER_H - 8;
+  const bw = boardW();
+  const bx = player.x + pw/2 - bw/2;
+  const by = player.y + PLAYER_H - 10;
   ctx.save();
-  ctx.translate(bx + BOARD_W/2, by + BOARD_H/2);
+  ctx.translate(bx + bw/2, by + BOARD_H/2);
   ctx.rotate(player.rot * 0.6);
-  const grad = ctx.createLinearGradient(-BOARD_W/2, 0, BOARD_W/2, 0);
+
+  // boost glow behind the board
   if (boosting) {
-    grad.addColorStop(0, '#ff8a3d');
-    grad.addColorStop(0.5, '#ffd23f');
-    grad.addColorStop(1, '#ff8a3d');
-  } else {
-    grad.addColorStop(0, '#4a90d9');
-    grad.addColorStop(0.5, '#9fd3ff');
-    grad.addColorStop(1, '#4a90d9');
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, bw*0.65);
+    glow.addColorStop(0, '#ffd23f');
+    glow.addColorStop(1, 'rgba(255,138,61,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, bw*0.65, BOARD_H*1.8, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
   }
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, BOARD_W/2, BOARD_H/2, 0, 0, Math.PI*2);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
+
+  if (boardImg.complete && boardImg.naturalWidth > 0) {
+    ctx.drawImage(boardImg, -bw/2, -BOARD_H/2, bw, BOARD_H);
+  } else {
+    ctx.fillStyle = boosting ? '#ffb648' : '#6b7a3f';
+    ctx.fillRect(-bw/2, -BOARD_H/2, bw, BOARD_H);
+  }
   ctx.restore();
 }
 
