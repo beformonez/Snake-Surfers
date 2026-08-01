@@ -69,26 +69,51 @@
     color: #1a1a2e; cursor: pointer; box-shadow: 0 6px 16px rgba(0,0,0,0.35);
   }
   #overlay button.startBtn:active { transform: scale(0.96); }
-  #rotateOverlay {
+  #fsPrompt {
     position: fixed; inset: 0; z-index: 999;
     background: #05050c;
-    display: none;
+    display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     color: #fff;
     text-align: center;
     gap: 16px;
+    cursor: pointer;
   }
-  #rotateOverlay .icon {
-    font-size: 54px;
-    animation: rotatePulse 1.4s ease-in-out infinite;
+  #fsPrompt .icon {
+    font-size: 48px;
+    animation: tapPulse 1.4s ease-in-out infinite;
   }
-  #rotateOverlay p { max-width: 260px; opacity: 0.85; font-size: 15px; margin: 0; }
-  @keyframes rotatePulse {
-    0%, 100% { transform: rotate(0deg); }
-    50% { transform: rotate(90deg); }
+  #fsPrompt p { max-width: 260px; opacity: 0.85; font-size: 15px; margin: 0; }
+  @keyframes tapPulse {
+    0%, 100% { transform: scale(1); opacity: 0.9; }
+    50% { transform: scale(1.15); opacity: 1; }
   }
+  #pauseBtn {
+    position: absolute; top: 10px; right: 14px;
+    width: 40px; height: 40px; border-radius: 10px;
+    border: none; background: rgba(255,255,255,0.15);
+    color: #fff; font-size: 18px; font-weight: 800;
+    pointer-events: auto; z-index: 5;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #pauseBtn:active { transform: scale(0.92); }
+  #pauseOverlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; color: #fff;
+    background: rgba(10,10,20,0.75); text-align: center; gap: 14px;
+    z-index: 20;
+  }
+  #pauseOverlay h1 { margin: 0; font-size: 28px; letter-spacing: 1px; }
+  #pauseOverlay button {
+    padding: 12px 30px; font-size: 16px; font-weight: 700;
+    border: none; border-radius: 30px; cursor: pointer;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+  }
+  #resumeBtn { background: linear-gradient(135deg,#f5c518,#f28c18); color: #1a1a2e; }
+  #restartBtn { background: rgba(255,255,255,0.15); color: #fff; }
+  #pauseOverlay button:active { transform: scale(0.96); }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -96,20 +121,26 @@
 <div id="wrap">
   <canvas id="c"></canvas>
   <div id="hud">0</div>
+  <button id="pauseBtn" class="hidden">II</button>
   <div id="controls">
     <button id="jumpBtn" class="ctrl-btn">ҮСРЭХ</button>
     <button id="boostBtn" class="ctrl-btn">BOOST</button>
   </div>
-  <div id="overlay">
+  <div id="overlay" class="hidden">
     <div id="idleWrap"><img id="idleImg" src="idle/01.png" alt="character"></div>
     <h1>BOARD DASH</h1>
     <p>Нисдэг board дээр гүйж яв. ҮСРЭХ дар — үсэрнэ. BOOST-ыг барь — хурдасаад дээш хөвнө.</p>
     <button id="startBtn" class="startBtn">PLAY</button>
   </div>
+  <div id="pauseOverlay" class="hidden">
+    <h1>PAUSE</h1>
+    <button id="resumeBtn">Үргэлжлүүлэх</button>
+    <button id="restartBtn">Дахин эхлэх</button>
+  </div>
 </div>
-<div id="rotateOverlay">
-  <div class="icon">📱</div>
-  <p>Тоглохын тулд утсаа хэвтээ (landscape) байрлалд эргүүлнэ үү</p>
+<div id="fsPrompt">
+  <div class="icon">👆</div>
+  <p>Тоглохын тулд дэлгэц дээр дарна уу</p>
 </div>
 <script>
 const wrap = document.getElementById('wrap');
@@ -122,7 +153,6 @@ const jumpBtn = document.getElementById('jumpBtn');
 const boostBtn = document.getElementById('boostBtn');
 const overlayTitle = overlay.querySelector('h1');
 const overlayText = overlay.querySelector('p');
-const rotateOverlay = document.getElementById('rotateOverlay');
 const idleImg = document.getElementById('idleImg');
 
 // --- Home screen idle animation (21 frames, plays only while the menu/overlay is visible) ---
@@ -149,28 +179,20 @@ function stopIdleAnim() {
   if (idleTimerId) { clearInterval(idleTimerId); idleTimerId = null; }
 }
 
-// --- orientation gate: block play in portrait, prompt to rotate ---
-function checkOrientation() {
-  const isPortrait = window.innerHeight > window.innerWidth;
-  rotateOverlay.style.display = isPortrait ? 'flex' : 'none';
-}
-window.addEventListener('resize', checkOrientation);
-window.addEventListener('orientationchange', checkOrientation);
-checkOrientation();
-
-// --- fullscreen + landscape lock, triggered by user gesture ---
-async function goFullscreenLandscape() {
+// --- fullscreen prompt: first tap on screen requests fullscreen, then Home appears ---
+const fsPrompt = document.getElementById('fsPrompt');
+async function goFullscreen() {
   try {
     const el = document.documentElement;
     if (el.requestFullscreen) await el.requestFullscreen();
     else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
   } catch (e) { /* fullscreen may be denied, ignore */ }
-  try {
-    if (screen.orientation && screen.orientation.lock) {
-      await screen.orientation.lock('landscape');
-    }
-  } catch (e) { /* not supported (e.g. iOS Safari) - user rotates manually */ }
 }
+fsPrompt.addEventListener('click', async () => {
+  await goFullscreen();
+  fsPrompt.classList.add('hidden');
+  showStart(true);
+}, { once: true });
 
 function resize() {
   canvas.width = window.innerWidth * devicePixelRatio;
@@ -247,7 +269,8 @@ function spawnObstacle() {
 }
 
 function doJump() {
-  if (gameOver) { resetGame(); showStart(false); running = true; return; }
+  if (gamePaused) return;
+  if (gameOver) { resetGame(); showStart(false); running = true; showPauseBtn(true); return; }
   if (!running) { running = true; return; }
   if (player.onGround) {
     player.vy = JUMP_VELOCITY;
@@ -258,7 +281,8 @@ function doJump() {
 
 let boostHeld = false;
 function startBoost() {
-  if (gameOver) { resetGame(); showStart(false); running = true; return; }
+  if (gamePaused) return;
+  if (gameOver) { resetGame(); showStart(false); running = true; showPauseBtn(true); return; }
   if (!running) { running = true; }
   boostHeld = true;
   holdStart = performance.now();
@@ -302,10 +326,45 @@ window.addEventListener('keyup', (e) => {
 });
 
 startBtn.addEventListener('click', () => {
-  goFullscreenLandscape();
+  goFullscreen();
   showStart(false);
   resetGame();
   running = true;
+  showPauseBtn(true);
+});
+
+const pauseBtn = document.getElementById('pauseBtn');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const resumeBtn = document.getElementById('resumeBtn');
+const restartBtn = document.getElementById('restartBtn');
+let gamePaused = false;
+
+function showPauseBtn(show) {
+  pauseBtn.classList.toggle('hidden', !show);
+}
+
+function pauseGame() {
+  if (!running || gameOver) return;
+  gamePaused = true;
+  running = false;
+  pauseOverlay.classList.remove('hidden');
+}
+
+function resumeGame() {
+  gamePaused = false;
+  running = true;
+  lastTime = performance.now();
+  pauseOverlay.classList.add('hidden');
+}
+
+pauseBtn.addEventListener('click', pauseGame);
+resumeBtn.addEventListener('click', resumeGame);
+restartBtn.addEventListener('click', () => {
+  pauseOverlay.classList.add('hidden');
+  gamePaused = false;
+  resetGame();
+  running = true;
+  showPauseBtn(true);
 });
 
 function showStart(show, title, text, btnLabel, showIdle) {
@@ -315,6 +374,7 @@ function showStart(show, title, text, btnLabel, showIdle) {
     if (title) overlayTitle.textContent = title;
     if (text) overlayText.textContent = text;
     startBtn.textContent = btnLabel || 'PLAY';
+    showPauseBtn(false);
     if (showIdle) {
       idleImg.parentElement.classList.remove('hidden');
       startIdleAnim();
@@ -565,7 +625,6 @@ function draw() {
 }
 
 resetGame();
-showStart(true);
 requestAnimationFrame(loop);
 </script>
 </body>
