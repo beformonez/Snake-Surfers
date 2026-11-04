@@ -1,0 +1,6 @@
+{
+  "appId": "com.amidral.burgerrush",
+  "appName": "Burger Rush",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
